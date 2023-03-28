@@ -1,12 +1,15 @@
 use tracing_subscriber::fmt::format::FmtSpan;
+use warp::{http::Method, Filter};
 
 mod config;
-mod errors;
+mod controller;
+mod error;
+mod model;
 mod store;
-mod types;
 
 #[tokio::main]
-async fn main() -> Result<(), errors::Error> {
+async fn main() -> Result<(), error::Error> {
+    // load config
     dotenv::dotenv().ok();
 
     let log_filter =
@@ -19,13 +22,30 @@ async fn main() -> Result<(), errors::Error> {
 
     let config = config::Config::new().expect("Invalid configuration");
 
+    // initialize store
     let store = store::Store::new(&format!(
         "postgres://{}:{}@{}:{}/{}",
         config.db_user, config.db_password, config.db_host, config.db_port, config.db_name
     ))
     .await;
 
-    println!("Hello, world!");
+    // create routes
+    let store_filter = warp::any().map(move || store.clone());
+
+    let spaces_path = warp::path("spaces");
+    let create_space = warp::post()
+        .and(spaces_path)
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::json())
+        .and_then(controller::space::create_space);
+
+    let routes = create_space
+        .with(warp::trace::request())
+        .recover(error::return_error);
+
+    // run server
+    warp::serve(routes).run(([0, 0, 0, 0], config.port)).await;
 
     Ok(())
 }
