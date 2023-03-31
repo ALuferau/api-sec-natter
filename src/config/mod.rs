@@ -6,6 +6,8 @@ pub struct Config {
     pub port: u16,
     pub db_user: String,
     pub db_password: String,
+    pub db_api_user: String,
+    pub db_api_password: String,
     pub db_host: String,
     pub db_port: u16,
     pub db_name: String,
@@ -21,6 +23,11 @@ impl Config {
         let db_user = env::var("POSTGRES_USER")
             .map_err(|_| crate::error::Error::ConfigurationError(String::from("POSTGRES_USER")))?;
         let db_password = env::var("POSTGRES_PASSWORD").map_err(|_| {
+            crate::error::Error::ConfigurationError(String::from("POSTGRES_PASSWORD"))
+        })?;
+        let db_api_user = env::var("POSTGRES_API_USER")
+            .map_err(|_| crate::error::Error::ConfigurationError(String::from("POSTGRES_USER")))?;
+        let db_api_password = env::var("POSTGRES_API_PASSWORD").map_err(|_| {
             crate::error::Error::ConfigurationError(String::from("POSTGRES_PASSWORD"))
         })?;
         let db_host = env::var("POSTGRES_HOST")
@@ -39,6 +46,8 @@ impl Config {
             port,
             db_user,
             db_password,
+            db_api_user,
+            db_api_password,
             db_host,
             db_port,
             db_name,

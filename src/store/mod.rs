@@ -10,14 +10,41 @@ pub struct Store {
 }
 
 impl Store {
-    pub async fn new(db_url: &str) -> Self {
+    pub async fn new_from_config(config: &crate::config::Config) -> Self {
+        Store::new_from_url(
+            &format!(
+                "postgres://{}:{}@{}:{}/{}",
+                config.db_user, config.db_password, config.db_host, config.db_port, config.db_name
+            ),
+            &format!(
+                "postgres://{}:{}@{}:{}/{}",
+                config.db_api_user,
+                config.db_api_password,
+                config.db_host,
+                config.db_port,
+                config.db_name
+            ),
+        )
+        .await
+    }
+
+    async fn new_from_url(db_url: &str, db_api_url: &str) -> Self {
         let db_pool = match PgPoolOptions::new()
-            .max_connections(5)
+            .max_connections(1)
             .connect(db_url)
             .await
         {
-            Ok(pool) => pool,
-            Err(e) => panic!("store::new Unable to connect to the Db: {:?}", e),
+            Ok(pool) => {
+                tracing::event!(
+                    tracing::Level::INFO,
+                    "store::connected success for migration"
+                );
+                pool
+            }
+            Err(e) => panic!(
+                "store::new Unable to connect to the Db for migration: {:?}",
+                e
+            ),
         };
 
         match sqlx::migrate!("./src/store/migrations/")
@@ -26,10 +53,23 @@ impl Store {
         {
             Ok(res) => tracing::event!(tracing::Level::INFO, "store::migrated success {:?}", res),
             Err(e) => tracing::event!(tracing::Level::ERROR, "store::migrated error {:?}", e),
-        }
+        };
+        db_pool.close().await;
+
+        let db_api_pool = match PgPoolOptions::new()
+            .max_connections(5)
+            .connect(db_api_url)
+            .await
+        {
+            Ok(pool) => {
+                tracing::event!(tracing::Level::INFO, "store::connected success for api");
+                pool
+            }
+            Err(e) => panic!("store::new Unable to connect to the Db: {:?}", e),
+        };
 
         Store {
-            connection: db_pool,
+            connection: db_api_pool,
         }
     }
 
