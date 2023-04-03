@@ -10,17 +10,9 @@ pub async fn create_space(
         ));
     }
     let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9]{1,29}$").unwrap();
-    println!(
-        "REGEXP for '{}' is {}",
-        &new_space.owner,
-        re.is_match(&new_space.owner)
-    );
     if !re.is_match(&new_space.owner) {
         return Err(warp::reject::custom(
-            crate::error::Error::IllegalArgumentException(format!(
-                "Invalid username: '{}'",
-                &new_space.owner
-            )),
+            crate::error::Error::IllegalArgumentException(String::from("Invalid username")),
         ));
     }
     match create(store, new_space).await {
