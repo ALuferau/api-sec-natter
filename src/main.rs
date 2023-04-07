@@ -1,6 +1,9 @@
-use reqwest::header::{HeaderMap, HeaderValue};
 use tracing_subscriber::fmt::format::FmtSpan;
-use warp::{Filter};
+use warp::Filter;
+use tower::{make::Shared, ServiceBuilder};
+use tower_http::{compression::CompressionLayer};
+use std::time::Duration;
+
 
 mod config;
 mod controller;
@@ -37,21 +40,37 @@ async fn main() -> Result<(), error::Error> {
         .and(warp::body::json())
         .and_then(controller::space::create_space);
 
-    let mut headers = HeaderMap::new();
-    headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
-    headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
-    headers.insert("X-XSS-Protection", HeaderValue::from_static("0"));
-    headers.insert("Cache-Control", HeaderValue::from_static("no-store"));
-    headers.insert("Content-Security-Policy", HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"));
-    headers.insert("Server", HeaderValue::from_static(""));
+    let mut headers = hyper::header::HeaderMap::new();
+    headers.insert("X-Content-Type-Options", hyper::header::HeaderValue::from_static("nosniff"));
+    headers.insert("X-Frame-Options", hyper::header::HeaderValue::from_static("DENY"));
+    headers.insert("X-XSS-Protection", hyper::header::HeaderValue::from_static("0"));
+    headers.insert("Cache-Control", hyper::header::HeaderValue::from_static("no-store"));
+    headers.insert("Content-Security-Policy", hyper::header::HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"));
+    headers.insert("Server", hyper::header::HeaderValue::from_static(""));
 
     let routes = create_space
         .with(warp::trace::request())
         .recover(error::return_error)
         .with(warp::reply::with::headers(headers));
 
+    let warp_service = warp::service(routes);
+
+    let web_service = ServiceBuilder::new()
+        .timeout(Duration::from_secs(10))
+        .layer(CompressionLayer::new())
+        .buffer(5)
+        .concurrency_limit(5)
+        .buffer(5)
+        .rate_limit(100, std::time::Duration::from_secs(1))
+        .service(warp_service);
+
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.port));
+    let listener = std::net::TcpListener::bind(addr).unwrap();
     // run server
-    warp::serve(routes).run(([0, 0, 0, 0], config.port)).await;
+    hyper::Server::from_tcp(listener)
+        .unwrap()
+        .serve(Shared::new(web_service))
+        .await?;
 
     Ok(())
 }

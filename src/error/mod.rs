@@ -5,6 +5,7 @@ pub enum Error {
     ConfigurationError(String),
     DatabaseQueryError(sqlx::Error),
     IllegalArgumentException(String),
+    ServerError(hyper::Error),
 }
 
 impl std::fmt::Display for Error {
@@ -19,7 +20,16 @@ impl std::fmt::Display for Error {
             Error::IllegalArgumentException(ref err) => {
                 write!(f, "Invalid input: {}", err)
             }
+            Error::ServerError(ref err) => {
+                write!(f, "Server error: {}", err)
+            }
         }
+    }
+}
+
+impl From<hyper::Error> for Error {
+    fn from(value: hyper::Error) -> Self {
+        Error::ServerError(value)
     }
 }
 
@@ -31,7 +41,7 @@ struct ErrorResponse {
 }
 
 pub async fn return_error(r: warp::Rejection) -> Result<impl warp::Reply, warp::Rejection> {
-    if let Some(Error::DatabaseQueryError(e)) = r.find() {
+    if let Some(Error::DatabaseQueryError(_)) = r.find() {
         Ok(warp::reply::with_status(
             warp::reply::json(&ErrorResponse {
                 message: "Database Query Error".to_string(),
@@ -42,6 +52,13 @@ pub async fn return_error(r: warp::Rejection) -> Result<impl warp::Reply, warp::
         Ok(warp::reply::with_status(
             warp::reply::json(&ErrorResponse {
                 message: format!("Invalid input: {}", &e),
+            }),
+            warp::hyper::StatusCode::BAD_REQUEST,
+        ))
+    } else if let Some(Error::ServerError(_)) = r.find() {
+        Ok(warp::reply::with_status(
+            warp::reply::json(&ErrorResponse {
+                message: "Internal server error".to_string(),
             }),
             warp::hyper::StatusCode::BAD_REQUEST,
         ))
