@@ -3,6 +3,7 @@ use sqlx::Row;
 
 use crate::model::message;
 use crate::model::space::{Space, SpaceId};
+use crate::model::user::{NewUser, User};
 
 #[derive(Debug, Clone)]
 pub struct Store {
@@ -88,6 +89,22 @@ impl Store {
             }
         }
     }
+
+    pub async fn create_user(&self, new_user: User) -> Result<User, crate::error::Error> {
+        match sqlx::query("INSERT INTO users(user_id, pw_hash) VALUES ($1, $2) RETURNING user_id, pw_hash;")
+            .bind(new_user.user_id)
+            .bind(new_user.pw_hash)
+            .map(map_to_user)
+            .fetch_one(&self.connection)
+            .await
+        {
+            Ok(user) => Ok(user),
+            Err(e) => {
+                tracing::event!(tracing::Level::ERROR, "store::create_user {:?}", e);
+                Err(crate::error::Error::DatabaseQueryError(e))
+            }
+        }
+    }
 }
 
 fn map_to_space(row: PgRow) -> Space {
@@ -95,5 +112,12 @@ fn map_to_space(row: PgRow) -> Space {
         space_id: Some(SpaceId(row.get("space_id"))),
         name: row.get("name"),
         owner: row.get("owner"),
+    }
+}
+
+fn map_to_user(row: PgRow) -> User {
+    User {
+        user_id: row.get("user_id"),
+        pw_hash: row.get("pw_hash"),
     }
 }

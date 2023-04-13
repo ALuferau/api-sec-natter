@@ -40,6 +40,14 @@ async fn main() -> Result<(), error::Error> {
         .and(warp::body::json())
         .and_then(controller::space::create_space);
 
+    let users_path = warp::path("users");
+    let register_user = warp::post()
+        .and(users_path)
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::json())
+        .and_then(controller::user::register_user);
+
     let mut headers = hyper::header::HeaderMap::new();
     headers.insert("X-Content-Type-Options", hyper::header::HeaderValue::from_static("nosniff"));
     headers.insert("X-Frame-Options", hyper::header::HeaderValue::from_static("DENY"));
@@ -48,7 +56,8 @@ async fn main() -> Result<(), error::Error> {
     headers.insert("Content-Security-Policy", hyper::header::HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"));
     headers.insert("Server", hyper::header::HeaderValue::from_static(""));
 
-    let routes = create_space
+    let routes = register_user
+        .or(create_space)
         .with(warp::trace::request())
         .recover(error::return_error)
         .with(warp::reply::with::headers(headers));
@@ -56,12 +65,11 @@ async fn main() -> Result<(), error::Error> {
     let warp_service = warp::service(routes);
 
     let web_service = ServiceBuilder::new()
-        .timeout(Duration::from_secs(10))
-        .layer(CompressionLayer::new())
-        .buffer(5)
         .concurrency_limit(5)
         .buffer(5)
         .rate_limit(100, std::time::Duration::from_secs(1))
+        .timeout(Duration::from_secs(10))
+        .layer(CompressionLayer::new())
         .service(warp_service);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.port));
