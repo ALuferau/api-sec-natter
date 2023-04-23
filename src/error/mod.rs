@@ -1,4 +1,6 @@
-use serde::Serialize;
+use axum::{response::{IntoResponse, Response}, Json};
+use hyper::StatusCode;
+use serde_json::json;
 
 #[derive(Debug)]
 pub enum Error {
@@ -33,42 +35,39 @@ impl From<hyper::Error> for Error {
     }
 }
 
-impl warp::reject::Reject for Error {}
 
-#[derive(Serialize)]
-struct ErrorResponse {
-    message: String,
-}
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        let (status, error_message) = match self {
+            Error::ConfigurationError(ref err) => {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+            Error::DatabaseQueryError(ref err) => {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Database Query Error".to_string(),
+                )
+            }
+            Error::IllegalArgumentException(ref err) => {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid input: {}", err),
+                )
+            }
+            Error::ServerError(_) => {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+        };
+        let body = Json(json!({
+            "message": error_message,
+        }));
 
-pub async fn return_error(r: warp::Rejection) -> Result<impl warp::Reply, warp::Rejection> {
-    if let Some(Error::DatabaseQueryError(_)) = r.find() {
-        Ok(warp::reply::with_status(
-            warp::reply::json(&ErrorResponse {
-                message: "Database Query Error".to_string(),
-            }),
-            warp::hyper::StatusCode::INTERNAL_SERVER_ERROR,
-        ))
-    } else if let Some(Error::IllegalArgumentException(e)) = r.find() {
-        Ok(warp::reply::with_status(
-            warp::reply::json(&ErrorResponse {
-                message: format!("Invalid input: {}", &e),
-            }),
-            warp::hyper::StatusCode::BAD_REQUEST,
-        ))
-    } else if let Some(Error::ServerError(_)) = r.find() {
-        Ok(warp::reply::with_status(
-            warp::reply::json(&ErrorResponse {
-                message: "Internal server error".to_string(),
-            }),
-            warp::hyper::StatusCode::BAD_REQUEST,
-        ))
-    } else {
-        tracing::event!(tracing::Level::ERROR, "response::unspecified error {:?}", &r);
-        Ok(warp::reply::with_status(
-            warp::reply::json(&ErrorResponse {
-                message: String::from("Bad request"),
-            }),
-            warp::hyper::StatusCode::BAD_REQUEST,
-        ))
+        (status, body).into_response()
     }
 }

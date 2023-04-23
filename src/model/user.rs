@@ -17,3 +17,8 @@ pub struct NewUserCreated {
     pub username: String,
     pub uri: String,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Session {
+    pub username: String,
+}

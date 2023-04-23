@@ -1,8 +1,15 @@
-use tracing_subscriber::fmt::format::FmtSpan;
-use warp::Filter;
+use axum::middleware::map_response;
+use axum::response::Response;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use axum::{
+    routing::get,
+    routing::post,
+    Router,
+};
 use tower::{make::Shared, ServiceBuilder};
 use tower_http::{compression::CompressionLayer};
 use std::time::Duration;
+use std::sync::Arc;
 
 
 mod config;
@@ -16,12 +23,12 @@ async fn main() -> Result<(), error::Error> {
     // load config
     dotenv::dotenv().ok();
 
-    let log_filter =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "api_sec_natter=info,warp=debug".to_owned());
+    let log_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "api_sec_natter=info,warp=debug".into());
 
-    tracing_subscriber::fmt()
-        .with_env_filter(log_filter)
-        .with_span_events(FmtSpan::CLOSE)
+    tracing_subscriber::registry()
+        .with(log_filter)
+        .with(tracing_subscriber::fmt::layer())
         .init();
 
     let config = config::Config::new().expect("Invalid configuration");
@@ -30,39 +37,19 @@ async fn main() -> Result<(), error::Error> {
     let store = store::Store::new_from_config(&config).await;
 
     // create routes
-    let store_filter = warp::any().map(move || store.clone());
+    let store_filter = Arc::new(store);
 
-    let spaces_path = warp::path("spaces");
-    let create_space = warp::post()
-        .and(spaces_path)
-        .and(warp::path::end())
-        .and(store_filter.clone())
-        .and(warp::body::json())
-        .and_then(controller::space::create_space);
+    let space_routes = Router::new()
+        .route("/", post(controller::space::create_space));
 
-    let users_path = warp::path("users");
-    let register_user = warp::post()
-        .and(users_path)
-        .and(warp::path::end())
-        .and(store_filter.clone())
-        .and(warp::body::json())
-        .and_then(controller::user::register_user);
 
-    let mut headers = hyper::header::HeaderMap::new();
-    headers.insert("X-Content-Type-Options", hyper::header::HeaderValue::from_static("nosniff"));
-    headers.insert("X-Frame-Options", hyper::header::HeaderValue::from_static("DENY"));
-    headers.insert("X-XSS-Protection", hyper::header::HeaderValue::from_static("0"));
-    headers.insert("Cache-Control", hyper::header::HeaderValue::from_static("no-store"));
-    headers.insert("Content-Security-Policy", hyper::header::HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"));
-    headers.insert("Server", hyper::header::HeaderValue::from_static(""));
+    let user_routes = Router::new()
+        .route("/", post(controller::user::register_user));
 
-    let routes = register_user
-        .or(create_space)
-        .with(warp::trace::request())
-        .recover(error::return_error)
-        .with(warp::reply::with::headers(headers));
-
-    let warp_service = warp::service(routes);
+    let api_routes = Router::new()
+        .nest("/spaces", space_routes)
+        .nest("/users", user_routes)
+        .with_state(store_filter);
 
     let web_service = ServiceBuilder::new()
         .concurrency_limit(5)
@@ -70,7 +57,8 @@ async fn main() -> Result<(), error::Error> {
         .rate_limit(100, std::time::Duration::from_secs(1))
         .timeout(Duration::from_secs(10))
         .layer(CompressionLayer::new())
-        .service(warp_service);
+        .layer(map_response(set_general_headers))
+        .service(api_routes);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.port));
     let listener = std::net::TcpListener::bind(addr).unwrap();
@@ -81,4 +69,16 @@ async fn main() -> Result<(), error::Error> {
         .await?;
 
     Ok(())
+}
+
+async fn set_general_headers<B>(mut response: Response<B>) -> Response<B> {
+    let headers = response.headers_mut();
+    headers.insert("X-Content-Type-Options", hyper::header::HeaderValue::from_static("nosniff"));
+    headers.insert("X-Frame-Options", hyper::header::HeaderValue::from_static("DENY"));
+    headers.insert("X-XSS-Protection", hyper::header::HeaderValue::from_static("0"));
+    headers.insert("Cache-Control", hyper::header::HeaderValue::from_static("no-store"));
+    headers.insert("Content-Security-Policy", hyper::header::HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"));
+    headers.insert("Server", hyper::header::HeaderValue::from_static(""));
+
+    response
 }

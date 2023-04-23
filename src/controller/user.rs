@@ -1,30 +1,39 @@
+use std::sync::Arc;
+
 use argon2::{self, Config};
+use axum::{Json, response::IntoResponse, extract::State};
 use rand::Rng;
 use regex::Regex;
 
+use crate::error::Error;
+
 pub async fn register_user(
-    store: crate::store::Store,
-    new_user: crate::model::user::NewUser,
-) -> Result<impl warp::Reply, warp::Rejection> {
+    State(store): State<Arc<crate::store::Store>>,
+    Json(new_user): Json<crate::model::user::NewUser>,
+) -> impl IntoResponse {
     if new_user.password.chars().count() < 8 {
-        return Err(warp::reject::custom(
-            crate::error::Error::IllegalArgumentException(String::from("Password too short. Use at least 8 characters")),
-        ));
+        return Err(
+            Error::IllegalArgumentException(
+                String::from("Password too short. Use at least 8 characters")
+            ),
+        );
     }
     let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9]{1,29}$").unwrap();
     if !re.is_match(&new_user.username) {
-        return Err(warp::reject::custom(
-            crate::error::Error::IllegalArgumentException(String::from("Invalid username")),
-        ));
+        return Err(
+            Error::IllegalArgumentException(
+                String::from("Invalid username")
+            ),
+        );
     }
     match create(store, new_user).await {
-        Ok(space) => Ok(warp::reply::json(&space)),
-        Err(e) => Err(warp::reject::custom(e)),
+        Ok(new_user) => Ok(Json(new_user)),
+        Err(e) => Err(e),
     }
 }
 
 async fn create(
-    store: crate::store::Store,
+    store: Arc<crate::store::Store>,
     new_user: crate::model::user::NewUser,
 ) -> Result<crate::model::user::NewUserCreated, crate::error::Error> {
     let hashed_password = hash_password(new_user.password.as_bytes());
