@@ -1,4 +1,7 @@
-use axum::{response::{IntoResponse, Response}, Json};
+use axum::{
+    response::{IntoResponse, Response},
+    Json,
+};
 use hyper::StatusCode;
 use serde_json::json;
 
@@ -35,34 +38,24 @@ impl From<hyper::Error> for Error {
     }
 }
 
-
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
-            Error::ConfigurationError(ref err) => {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error".to_string(),
-                )
-            }
-            Error::DatabaseQueryError(ref err) => {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Database Query Error".to_string(),
-                )
-            }
+            Error::ConfigurationError(ref err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
+            Error::DatabaseQueryError(ref err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Database Query Error".to_string(),
+            ),
             Error::IllegalArgumentException(ref err) => {
-                (
-                    StatusCode::BAD_REQUEST,
-                    format!("Invalid input: {}", err),
-                )
+                (StatusCode::BAD_REQUEST, format!("Invalid input: {}", err))
             }
-            Error::ServerError(_) => {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error".to_string(),
-                )
-            }
+            Error::ServerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
         };
         let body = Json(json!({
             "message": error_message,

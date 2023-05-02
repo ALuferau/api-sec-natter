@@ -20,5 +20,5 @@ pub struct NewUserCreated {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Session {
-    pub username: String,
+    pub username: Option<String>,
 }

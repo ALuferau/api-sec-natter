@@ -1,16 +1,14 @@
-use axum::middleware::map_response;
-use axum::response::Response;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use axum::{
-    routing::get,
+    middleware::{self, map_response},
+    response::Response,
     routing::post,
     Router,
 };
-use tower::{make::Shared, ServiceBuilder};
-use tower_http::{compression::CompressionLayer};
-use std::time::Duration;
 use std::sync::Arc;
-
+use std::time::Duration;
+use tower::{make::Shared, ServiceBuilder};
+use tower_http::compression::CompressionLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
 mod controller;
@@ -40,11 +38,13 @@ async fn main() -> Result<(), error::Error> {
     let store_filter = Arc::new(store);
 
     let space_routes = Router::new()
-        .route("/", post(controller::space::create_space));
+        .route("/", post(controller::space::create_space))
+        .route_layer(middleware::from_fn_with_state(
+            store_filter.clone(),
+            controller::user::authenticate,
+        ));
 
-
-    let user_routes = Router::new()
-        .route("/", post(controller::user::register_user));
+    let user_routes = Router::new().route("/", post(controller::user::register_user));
 
     let api_routes = Router::new()
         .nest("/spaces", space_routes)
@@ -73,11 +73,28 @@ async fn main() -> Result<(), error::Error> {
 
 async fn set_general_headers<B>(mut response: Response<B>) -> Response<B> {
     let headers = response.headers_mut();
-    headers.insert("X-Content-Type-Options", hyper::header::HeaderValue::from_static("nosniff"));
-    headers.insert("X-Frame-Options", hyper::header::HeaderValue::from_static("DENY"));
-    headers.insert("X-XSS-Protection", hyper::header::HeaderValue::from_static("0"));
-    headers.insert("Cache-Control", hyper::header::HeaderValue::from_static("no-store"));
-    headers.insert("Content-Security-Policy", hyper::header::HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'; sandbox"));
+    headers.insert(
+        "X-Content-Type-Options",
+        hyper::header::HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        "X-Frame-Options",
+        hyper::header::HeaderValue::from_static("DENY"),
+    );
+    headers.insert(
+        "X-XSS-Protection",
+        hyper::header::HeaderValue::from_static("0"),
+    );
+    headers.insert(
+        "Cache-Control",
+        hyper::header::HeaderValue::from_static("no-store"),
+    );
+    headers.insert(
+        "Content-Security-Policy",
+        hyper::header::HeaderValue::from_static(
+            "default-src 'none'; frame-ancestors 'none'; sandbox",
+        ),
+    );
     headers.insert("Server", hyper::header::HeaderValue::from_static(""));
 
     response
