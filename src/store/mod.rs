@@ -1,7 +1,7 @@
 use sqlx::postgres::{PgPool, PgPoolOptions, PgRow};
 use sqlx::Row;
 
-use crate::model::message;
+use crate::model::message::{Message, MessageId};
 use crate::model::space::{Space, SpaceId};
 use crate::model::user::User;
 
@@ -90,6 +90,28 @@ impl Store {
         }
     }
 
+    pub async fn create_message(
+        &self,
+        new_message: Message,
+    ) -> Result<Message, crate::error::Error> {
+        match sqlx::query(
+            "INSERT INTO messages (space_id, msg_id, author, msg_time, msg_text) VALUES ($1, nextval('msg_id_seq'), $2, $3, $4) RETURNING space_id, msg_id, author, msg_time, msg_text;")
+            .bind(new_message.space_id.0)
+            .bind(new_message.author)
+            .bind(new_message.msg_time)
+            .bind(new_message.msg_text)
+            .map(map_to_message)
+            .fetch_one(&self.connection)
+            .await
+        {
+            Ok(message) => Ok(message),
+            Err(e) => {
+                tracing::event!(tracing::Level::ERROR, "store::create_message {:?}", e);
+                Err(crate::error::Error::DatabaseQueryError(e))
+            }
+        }
+    }
+
     pub async fn create_user(&self, new_user: User) -> Result<User, crate::error::Error> {
         match sqlx::query(
             "INSERT INTO users(user_id, pw_hash) VALUES ($1, $2) RETURNING user_id, pw_hash;",
@@ -128,6 +150,16 @@ fn map_to_space(row: PgRow) -> Space {
         space_id: Some(SpaceId(row.get("space_id"))),
         name: row.get("name"),
         owner: row.get("owner"),
+    }
+}
+
+fn map_to_message(row: PgRow) -> Message {
+    Message {
+        space_id: SpaceId(row.get("space_id")),
+        msg_id: Some(MessageId(row.get("msg_id"))),
+        author: row.get("author"),
+        msg_time: row.get("msg_time"),
+        msg_text: row.get("msg_text"),
     }
 }
 

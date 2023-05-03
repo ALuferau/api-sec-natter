@@ -6,3 +6,5 @@ CREATE TABLE spaces(
 );
 CREATE SEQUENCE space_id_seq OWNED BY spaces.space_id;
 CREATE UNIQUE INDEX space_name_idx ON spaces(name);
+GRANT SELECT, INSERT ON spaces TO natter_api_user;
+GRANT SELECT, USAGE ON space_id_seq TO natter_api_user;

@@ -41,11 +41,11 @@ impl From<hyper::Error> for Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
-            Error::ConfigurationError(ref err) => (
+            Error::ConfigurationError(ref _err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_string(),
             ),
-            Error::DatabaseQueryError(ref err) => (
+            Error::DatabaseQueryError(ref _err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Database Query Error".to_string(),
             ),

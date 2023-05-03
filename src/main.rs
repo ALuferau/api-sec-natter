@@ -44,11 +44,19 @@ async fn main() -> Result<(), error::Error> {
             controller::user::authenticate,
         ));
 
+    let message_routes = Router::new()
+        .route("/", post(controller::message::create_message))
+        .route_layer(middleware::from_fn_with_state(
+            store_filter.clone(),
+            controller::user::authenticate,
+        ));
+
     let user_routes = Router::new().route("/", post(controller::user::register_user));
 
     let api_routes = Router::new()
         .nest("/spaces", space_routes)
         .nest("/users", user_routes)
+        .nest("/messages", message_routes)
         .with_state(store_filter);
 
     let web_service = ServiceBuilder::new()

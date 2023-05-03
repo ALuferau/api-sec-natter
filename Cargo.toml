@@ -19,7 +19,7 @@ tower-http = { version = "0.4.0", features = ["compression-gzip", "timeout"] }
 hyper = { version = "0.14", features = ["full"] }
 
 
-sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "migrate", "postgres"]}
+sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "migrate", "postgres", "chrono"]}
 chrono = { version = "0.4.23", features = ["serde"] }
 
 tracing = { version = "0.1", features = ["log"] }
