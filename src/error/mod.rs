@@ -10,6 +10,8 @@ pub enum Error {
     ConfigurationError(String),
     DatabaseQueryError(sqlx::Error),
     IllegalArgumentException(String),
+    AuthenticationError(String),
+    AuthorizationError(String),
     ServerError(hyper::Error),
 }
 
@@ -24,6 +26,12 @@ impl std::fmt::Display for Error {
             }
             Error::IllegalArgumentException(ref err) => {
                 write!(f, "Invalid input: {}", err)
+            }
+            Error::AuthenticationError(ref err) => {
+                write!(f, "Forbidden: {}", err)
+            }
+            Error::AuthorizationError(ref err) => {
+                write!(f, "Unauthorized: {}", err)
             }
             Error::ServerError(ref err) => {
                 write!(f, "Server error: {}", err)
@@ -51,6 +59,12 @@ impl IntoResponse for Error {
             ),
             Error::IllegalArgumentException(ref err) => {
                 (StatusCode::BAD_REQUEST, format!("Invalid input: {}", err))
+            }
+            Error::AuthenticationError(ref err) => {
+                (StatusCode::FORBIDDEN, format!("Forbidden: {}", err))
+            }
+            Error::AuthorizationError(ref _err) => {
+                (StatusCode::UNAUTHORIZED, "Unauthorized".to_string())
             }
             Error::ServerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,

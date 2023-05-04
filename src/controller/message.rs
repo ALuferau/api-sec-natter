@@ -24,14 +24,10 @@ pub async fn create_message(
             "Invalid author",
         )));
     }
-    let mut is_same_owner = false;
-    if let Some(username) = current_session.username {
-        is_same_owner = username == new_message.author;
-    }
-    if !is_same_owner {
-        return Err(crate::error::Error::IllegalArgumentException(String::from(
-            "Author must match authenticated user",
-        )));
+    if let Some(value) = current_session
+        .get_error_if_user_not_match(&new_message.author, "Author must match authenticated user")
+    {
+        return Err(value);
     }
     match create(
         store,

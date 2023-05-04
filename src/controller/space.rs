@@ -21,15 +21,13 @@ pub async fn create_space(
             "Invalid username",
         )));
     }
-    let mut is_same_owner = false;
-    if let Some(username) = current_session.username {
-        is_same_owner = username == new_space.owner;
+
+    if let Some(value) = current_session
+        .get_error_if_user_not_match(&new_space.owner, "Owner must match authenticated user")
+    {
+        return Err(value);
     }
-    if !is_same_owner {
-        return Err(crate::error::Error::IllegalArgumentException(String::from(
-            "Owner must match authenticated user",
-        )));
-    }
+
     match create(store, new_space).await {
         Ok(space) => Ok(Json(space)),
         Err(e) => Err(e),

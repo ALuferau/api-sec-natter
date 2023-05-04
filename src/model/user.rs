@@ -22,3 +22,26 @@ pub struct NewUserCreated {
 pub struct Session {
     pub username: Option<String>,
 }
+
+impl Session {
+    pub fn get_error_if_user_not_match(
+        &self,
+        pretend_user: &str,
+        message: &str,
+    ) -> Option<crate::error::Error> {
+        let mut is_same_owner = false;
+        if let Some(username) = &self.username {
+            is_same_owner = username == pretend_user;
+        } else {
+            return Some(crate::error::Error::AuthenticationError(String::from(
+                message,
+            )));
+        }
+        if !is_same_owner {
+            return Some(crate::error::Error::AuthorizationError(String::from(
+                message,
+            )));
+        }
+        None
+    }
+}
