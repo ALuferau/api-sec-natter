@@ -103,6 +103,10 @@ async fn set_general_headers<B>(mut response: Response<B>) -> Response<B> {
             "default-src 'none'; frame-ancestors 'none'; sandbox",
         ),
     );
+    headers.insert(
+        "Strict-Transport-Security",
+        hyper::header::HeaderValue::from_static("max-age=31536000"),
+    );
     headers.insert("Server", hyper::header::HeaderValue::from_static(""));
 
     response

@@ -29,19 +29,14 @@ impl Session {
         pretend_user: &str,
         message: &str,
     ) -> Option<crate::error::Error> {
-        let mut is_same_owner = false;
-        if let Some(username) = &self.username {
-            is_same_owner = username == pretend_user;
-        } else {
-            return Some(crate::error::Error::AuthenticationError(String::from(
+        match &self.username {
+            Some(username) if username == pretend_user => None,
+            Some(_) => Some(crate::error::Error::AuthorizationError(String::from(
                 message,
-            )));
-        }
-        if !is_same_owner {
-            return Some(crate::error::Error::AuthorizationError(String::from(
+            ))),
+            None => Some(crate::error::Error::AuthenticationError(String::from(
                 message,
-            )));
+            ))),
         }
-        None
     }
 }
